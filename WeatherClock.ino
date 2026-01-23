@@ -8,51 +8,51 @@
 #include <Adafruit_ST7789.h>
 
 // --- SETTINGS ---
-const char* ssid = "SSID";
-const char* password = "WIFI PASSWORD";
-String apiKey = "API KEY";
-String city = "DIST";
-String countryCode = "COUNTRY";
+const char* ssid = "wifi";         // Change to your WiFi SSID
+const char* password = "wifi";     // Change to your WiFi Password
+String apiKey = "api";             // Your OpenWeatherMap API Key
+String city = "DT";                // Your City
+String countryCode = "COUNTRY";    // Your Country Code
 
-int timezone = 5.5 * 3600;
+int timezone = 5.5 * 3600;         // UTC offset (5.5 for IST)
 int dst = 0;
 
 #define TFT_CS    D8
 #define TFT_RST   D4
 #define TFT_DC    D3
 
+// Initialize Display (240x320)
 Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 
 unsigned long lastWeatherUpdate = 0;
-const unsigned long weatherInterval = 600000; 
+const unsigned long weatherInterval = 600000; // 10 minutes
 int currentTemp = 0;
 int currentHum = 0;
 
 void setup() {
   tft.init(240, 320); 
-  tft.setRotation(1); 
+  tft.setRotation(1); // Landscape mode
   
-  // If your background is White when it should be Black, 
-  // uncomment the line below to flip the colors:
-  // tft.invertDisplay(true); 
-
-  tft.fillScreen(ST77XX_WHITE); // Setting background to White as requested
+  tft.fillScreen(ST77XX_WHITE); 
 
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
   }
 
+  // Sync time from NTP server
   configTime(timezone, dst, "pool.ntp.org");
   tft.fillScreen(ST77XX_WHITE); 
 }
 
 void loop() {
+  // Update weather every 10 mins
   if (millis() - lastWeatherUpdate > weatherInterval || lastWeatherUpdate == 0) {
     getWeather();
   }
+  
   displayUI();
-  delay(1000);
+  delay(1000); 
 }
 
 void getWeather() {
@@ -74,39 +74,63 @@ void getWeather() {
   lastWeatherUpdate = millis();
 }
 
+// Helper function to print centered text and clear old characters
+void printCentered(const char* buf, int y, int textSize, uint16_t color) {
+  int16_t x1, y1;
+  uint16_t w, h;
+  tft.setTextSize(textSize);
+  
+  // Calculate width of the text string to center it
+  tft.getTextBounds(buf, 0, y, &x1, &y1, &w, &h);
+  int x = (320 - w) / 2;
+  
+  // Set cursor and print with background color to overwrite old text
+  tft.setCursor(x, y);
+  tft.setTextColor(color, ST77XX_WHITE);
+  tft.print(buf);
+  
+  // Clear a small area after the text just in case the previous string was longer
+  tft.print("    "); 
+}
+
 void displayUI() {
   time_t now = time(nullptr);
   struct tm* ptm = localtime(&now);
 
-// 1. HEADING
-  tft.setTextSize(3);
-  tft.setTextColor(ST77XX_BLACK, ST77XX_WHITE); 
-  tft.setCursor(45, 10); 
-  tft.print("ANY TEXT HERE");
+  // 1. HEADING
+  printCentered("VU3TBU MK81AE", 10, 3, ST77XX_BLACK);
 
   // --- TIME SECTION ---
-  tft.setCursor(15, 60);
-  // Setting text to BLACK, background to WHITE
-  tft.setTextColor(ST77XX_BLUE, ST77XX_WHITE); 
-  tft.setTextSize(5); 
-  
   char timeBuf[10];
   sprintf(timeBuf, "%02d:%02d:%02d", ptm->tm_hour, ptm->tm_min, ptm->tm_sec);
-  tft.print(timeBuf);
+  printCentered(timeBuf, 50, 5, ST77XX_BLUE);
+
+  // --- DATE SECTION ---
+  char dateBuf[20];
+  strftime(dateBuf, sizeof(dateBuf), "%d - %m - %Y", ptm);
+  printCentered(dateBuf, 100, 2, ST77XX_BLACK);
+
+  // --- DAY SECTION ---
+  // This is where "Fridayday" was happening. printCentered() fixes it.
+  char dayBuf[20];
+  strftime(dayBuf, sizeof(dayBuf), "%A", ptm);
+  printCentered(dayBuf, 120, 2, ST77XX_BLACK);
 
   // --- DIVIDER LINE ---
-  tft.drawFastHLine(10, 130, 300, ST77XX_BLACK);
+  tft.drawFastHLine(20, 145, 280, ST77XX_BLACK);
 
   // --- WEATHER SECTION ---
   tft.setTextSize(3);
+  tft.setTextColor(ST77XX_BLACK, ST77XX_WHITE);
   
-  // Temp (Keeping it Cyan for visibility, or change to Black if preferred)
-  tft.setCursor(40, 160);
-  tft.setTextColor(ST77XX_BLACK, ST77XX_WHITE);
-  tft.printf("TEMP: %d C", currentTemp);
+  // Temperature
+  tft.setCursor(45, 170);
+  tft.printf("TEMP: %d ", currentTemp);
+  tft.drawCircle(195, 172, 3, ST77XX_BLACK); // Degree symbol
+  tft.setCursor(205, 170);
+  tft.print("C  ");
 
-  // Humidity (Setting to BLUE)
-  tft.setCursor(40, 200);
-  tft.setTextColor(ST77XX_BLACK, ST77XX_WHITE);
-  tft.printf("HUMI: %d %%", currentHum);
+  // Humidity
+  tft.setCursor(45, 210);
+  tft.printf("HUMI: %d %%  ", currentHum);
 }
